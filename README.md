@@ -8,7 +8,7 @@ Right now the parser works, but
 
 However. You should be able to run this via sbt (0.11.x) with
 
-sbt "run <yourfile>"
+        sbt "run <yourfile>"
 
 # Goals
 
