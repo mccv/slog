@@ -4,17 +4,47 @@ This is a very very preliminary attempt at writing a comprehensive Java gc log p
 Right now the parser works, but
 * there are almost certainly bugs and formats it won't parse
 * stat aggregation/output is crude at best
-* command line args are nonexistent.
 
 However. You should be able to run this via sbt (0.11.x) with
 
-        sbt "run <yourfile>"
+        sbt "run -f <yourfile>"
 
-# Goals
+Or build a jarfile to execute...
 
-I'd like to add command line options to output the following
+# Building
 
-* rate at which memory is being allocated
-* rate at which objects are moving between eden -> survivor -> tenured spaces
-* percentage of time the JVM is in stop the world
-* how much time are we spending in collection
+You can build an executable jar with
+
+        sbt one-jar
+
+This gets dumped into target/scala-2.9.2/....
+
+# Usage
+
+java -jar slog.jar
+
+        Usage: slog [options]
+
+          -f <value> | --file <value>
+                log file to parse
+          --from <value>
+                time since process start in seconds to start from
+          --to <value>
+                time since process start in seconds to parse to
+          -p <value> | --period <value>
+                period of stats (in seconds)
+          -g <value> | --generations <value>
+                gc generations to report statistics for
+          --print-detailed <value>
+                print detailed statistics
+          --print-cpu-times <value>
+                print cpu times for runs
+          --print-allocations <value>
+                print allocation statistics
+
+# Next Steps
+
+* Add ability to print stat summaries
+* Report on CMS activity
+* Parser a wider range of log files, as there are definitely gaps in the parser now
+* More flexibility with output format/visualization

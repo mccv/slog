@@ -12,6 +12,9 @@ class SlogParserTest extends FunSuite with ShouldMatchers {
   val cmsStartLine = "2012-11-26T18:08:50.656+0000: 224.926: [CMS-concurrent-preclean-start] \n"
   val cmsFinishLine = "2012-11-26T18:08:50.940+0000: 225.210: [GC[YG occupancy: 18568 K (29504 K)]225.210: [Rescan (parallel) , 0.0283650 secs]225.239: [weak refs processing, 0.0019260 secs] [1 CMS-remark: 721164K(770048K)] 739733K(799552K), 0.0305540 secs] [Times: user=0.06 sys=0.00, real=0.03 secs] \n"
   val fullGCLine = "2012-11-26T18:05:17.256+0000: 11.527: [Full GC 11.527: [CMS: 28301K->23605K(770048K), 0.2865310 secs] 31090K->23605K(784832K), [CMS Perm : 25462K->25407K(25600K)], 0.2869120 secs] [Times: user=0.24 sys=0.04, real=0.28 secs] \n"
+  val cmsInitialMarkLine = """2012-11-26T18:06:35.207+0000: 89.477: [GC [1 CMS-initial-mark: 388074K(770048K)] 402310K(799552K), 0.0282480 secs] [Times: user=0.02 sys=0.00, real=0.03 secs]
+                          |"""
+
   val withHeapDetails = """{Heap before GC invocations=0 (full 0):
                           | par new generation   total 14784K, used 13184K [0x586e0000, 0x596e0000, 0x5a6e0000)
                           |  eden space 13184K, 100% used [0x586e0000, 0x593c0000, 0x593c0000)
@@ -29,7 +32,6 @@ class SlogParserTest extends FunSuite with ShouldMatchers {
                           | concurrent-mark-sweep perm gen total 16384K, used 8772K [0xa36e0000, 0xa46e0000, 0xb36e0000)
                           |}
                           |""".stripMargin
-
   val withTenuringDistribution = """{Heap before GC invocations=20 (full 1):
                                    | par new generation   total 20800K, used 20480K [73ae00000, 73c2c0000, 745460000)
                                    |  eden space 20352K, 100% used [73ae00000, 73c1e0000, 73c1e0000)
@@ -52,7 +54,34 @@ class SlogParserTest extends FunSuite with ShouldMatchers {
                                    |}
                                    |""".stripMargin
 
+  val spaceLine = "  to   space 1600K,   0% used [0x59550000, 0x59550000, 0x596e0000)\n"
+
+  val genLine = " concurrent mark-sweep generation total 770048K, used 0K [0x5a6e0000, 0x896e0000, 0xa36e0000)\n"
+
+  val heapBefore = """{Heap before GC invocations=0 (full 0):
+                     | par new generation   total 14784K, used 13184K [0x586e0000, 0x596e0000, 0x5a6e0000)
+                     |  eden space 13184K, 100% used [0x586e0000, 0x593c0000, 0x593c0000)
+                     |  from space 1600K,   0% used [0x593c0000, 0x593c0000, 0x59550000)
+                     |  to   space 1600K,   0% used [0x59550000, 0x59550000, 0x596e0000)
+                     | concurrent mark-sweep generation total 770048K, used 0K [0x5a6e0000, 0x896e0000, 0xa36e0000)
+                     | concurrent-mark-sweep perm gen total 16384K, used 8772K [0xa36e0000, 0xa46e0000, 0xb36e0000)
+                     |""".stripMargin
+
+  val heapAfter = """Heap after GC invocations=1 (full 0):
+                    | par new generation   total 14784K, used 660K [0x586e0000, 0x596e0000, 0x5a6e0000)
+                    |  eden space 13184K,   0% used [0x586e0000, 0x586e0000, 0x593c0000)
+                    |  from space 1600K,  41% used [0x59550000, 0x595f5348, 0x596e0000)
+                    |  to   space 1600K,   0% used [0x593c0000, 0x593c0000, 0x59550000)
+                    | concurrent mark-sweep generation total 770048K, used 0K [0x5a6e0000, 0x896e0000, 0xa36e0000)
+                    | concurrent-mark-sweep perm gen total 16384K, used 8772K [0xa36e0000, 0xa46e0000, 0xb36e0000)
+                    |}
+                    |""".stripMargin
+
   val p = new GCLogParser
+
+  def printErr[T](result: ParsingResult[T]) {
+    println("error at: " + result.parseErrors(0).getStartIndex)
+  }
 
   test("parses minor gc line") {
     val result = ReportingParseRunner(p.Filep).run(minorLine)
@@ -81,6 +110,13 @@ class SlogParserTest extends FunSuite with ShouldMatchers {
     result.result.get.size should be(1)
   }
 
+  test("parses cms initial mark line") {
+    val result = ReportingParseRunner(p.RunLine).run(cmsInitialMarkLine)
+    if (!result.matched) printErr(result)
+    result.matched should be(true)
+    println(result.result.get)
+  }
+
   test("parses CMS finish line") {
     val result = ReportingParseRunner(p.Filep).run(cmsFinishLine)
     result.matched should be(true)
@@ -88,41 +124,20 @@ class SlogParserTest extends FunSuite with ShouldMatchers {
   }
 
   test("parse heap space line") {
-    val spaceLine = "  to   space 1600K,   0% used [0x59550000, 0x59550000, 0x596e0000)\n"
     val result = ReportingParseRunner(p.HeapSpacep).run(spaceLine)
     result.matched should be(true)
   }
 
   test("parse heap before") {
-    val heapBefore = """{Heap before GC invocations=0 (full 0):
-                       | par new generation   total 14784K, used 13184K [0x586e0000, 0x596e0000, 0x5a6e0000)
-                       |  eden space 13184K, 100% used [0x586e0000, 0x593c0000, 0x593c0000)
-                       |  from space 1600K,   0% used [0x593c0000, 0x593c0000, 0x59550000)
-                       |  to   space 1600K,   0% used [0x59550000, 0x59550000, 0x596e0000)
-                       | concurrent mark-sweep generation total 770048K, used 0K [0x5a6e0000, 0x896e0000, 0xa36e0000)
-                       | concurrent-mark-sweep perm gen total 16384K, used 8772K [0xa36e0000, 0xa46e0000, 0xb36e0000)
-                       |""".stripMargin
-
     val result = ReportingParseRunner(p.HeapBefore).run(heapBefore)
     result.matched should be(true)
   }
 
   test("parse heap after") {
-    val heapAfter = """Heap after GC invocations=1 (full 0):
-                            | par new generation   total 14784K, used 660K [0x586e0000, 0x596e0000, 0x5a6e0000)
-                            |  eden space 13184K,   0% used [0x586e0000, 0x586e0000, 0x593c0000)
-                            |  from space 1600K,  41% used [0x59550000, 0x595f5348, 0x596e0000)
-                            |  to   space 1600K,   0% used [0x593c0000, 0x593c0000, 0x59550000)
-                            | concurrent mark-sweep generation total 770048K, used 0K [0x5a6e0000, 0x896e0000, 0xa36e0000)
-                            | concurrent-mark-sweep perm gen total 16384K, used 8772K [0xa36e0000, 0xa46e0000, 0xb36e0000)
-                            |}
-                            |""".stripMargin
-
     val result = ReportingParseRunner(p.HeapAfter).run(heapAfter)
     result.matched should be(true)
   }
   test("parse heap gen line") {
-    val genLine = " concurrent mark-sweep generation total 770048K, used 0K [0x5a6e0000, 0x896e0000, 0xa36e0000)\n"
     val result = ReportingParseRunner(p.HeapGenp).run(genLine)
     result.matched should be(true)
   }

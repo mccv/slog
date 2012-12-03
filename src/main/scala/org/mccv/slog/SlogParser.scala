@@ -47,7 +47,9 @@ case class TimeSinceStartup(seconds: Int, ms: Int)
 /**
  * combination of a date and a time since process start
  */
-case class GCTimestamp(date: Date, sinceStartup: TimeSinceStartup)
+case class GCTimestamp(date: Date, sinceStartup: TimeSinceStartup) {
+  def offsetAsFloat: Double = sinceStartup.seconds + (sinceStartup.ms / 1000.0)
+}
 
 /**
  * stats for a particular age within a survivor space.
@@ -217,7 +219,7 @@ class GCLogParser extends Parser {
   }}
   def RunLine = rule { Dateoffsetp ~ ": " ~ Runp ~ " " ~ Timesp ~ EOL ~~> GCRun}
 
-  def Labelp = rule { "[" ~ oneOrMore(noneOf(" ]")) ~ "]" ~> (_.trim)}
+  def Labelp = rule { "[" ~ oneOrMore(noneOf(" ]")) ~> (_.trim) ~ "]" ~~> (_.trim)}
   def LabelLine = rule { Dateoffsetp ~ ": " ~ Labelp ~ EOL ~~> GCEvent}
 
   def CMSConcurrentLine = rule { Dateoffsetp ~ ": [" ~ oneOrMore(noneOf(":")) ~> (_.trim) ~ ": " ~ Number ~ "/" ~ Number ~ " secs] " ~ Timesp ~ EOL ~~> CMSRun}
